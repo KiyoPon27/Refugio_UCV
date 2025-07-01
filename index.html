@@ -6,8 +6,7 @@
   <title>Refugio UCV</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="https://qtdpnwchddkgmuvbtxkl.supabase.co"></script>
   <style id="app-style">
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -205,24 +204,13 @@
       </div>
     </div>
   </div>
-  
+
   <script id="app-script">
 
-    // configuración de Firebase
-    const firebaseConfig = {
-      apiKey: "AIzaSyDDMBE1KzJ0J8d-CB9TO9hR5sgZqq3hcLE",
-      authDomain: "chat-redragon-d83b7.firebaseapp.com",
-      databaseURL: "https://chat-redragon-d83b7-default-rtdb.firebaseio.com",
-      projectId: "chat-redragon-d83b7",
-      storageBucket: "chat-redragon-d83b7.appspot.com",
-      messagingSenderId: "458612487255",
-      appId: "1:458612487255:web:fd580d79985755bdc69f12",
-      measurementId: "G-WPKF4G22P1"
-    };
-
-    // Inicializar Firebase
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    // Inicializar Supabase
+    const supabaseUrl = 'https://TU_PROYECTO.supabase.co'; // ← reemplaza con tu URL
+    const supabaseKey = 'TU_API_KEY'; // ← reemplaza con tu API key pública
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
     // DOM Elements
     const landingScreen = document.getElementById('landing-screen');
@@ -271,8 +259,7 @@
         welcomeBanner.textContent = '¡Bienvenido al chat!';
         messageList.appendChild(welcomeBanner);
 
-        loadMessagesFromLocalStorage();
-        
+        loadChatHistory();
         messageInput.focus();
         
         // Request notification permission
@@ -422,24 +409,43 @@
     }
     
     // Simulate sending message to backend
-    function simulateSendMessageToBackend(message) {
-      const messageData = {
-        sender: username,
-        text: message,
-        type: 'user',
-        timestamp: Date.now()
-      };
-      db.ref("messages").push(messageData);
+    async function simulateSendMessageToBackend(message) {
+      const { error } = await supabase
+        .from('messages')
+        .insert([{ sender: username, text: message }]);
+
+      if (error) {
+        console.error('Error al enviar mensaje:', error.message);
+      }
     }
 
-    function startMessagePolling() {
-      db.ref("messages").on("child_added", (snapshot) => {
-        const msg = snapshot.val();
-        if (msg.sender !== username) {
-          addMessage(msg.sender, msg.text, msg.type || 'ai');
-        }
-      });
+    async function loadChatHistory() {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .order('timestamp', { ascending: true });
+
+      if (data) {
+        data.forEach(msg => {
+          addMessage(msg.sender, msg.text, msg.sender === username ? 'user' : 'ai');
+        });
+      }
     }
+
+
+
+    function startMessagePolling() {
+      supabase
+        .channel('chat-room')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+          const msg = payload.new;
+          if (msg.sender !== username) {
+            addMessage(msg.sender, msg.text, 'ai');
+          }
+        })
+        .subscribe();
+    }
+
 
     
     // Handle received message
