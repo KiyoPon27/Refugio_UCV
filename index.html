@@ -6,6 +6,8 @@
   <title>Refugio UCV</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
   <style id="app-style">
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -205,6 +207,23 @@
   </div>
   
   <script id="app-script">
+
+    // configuración de Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyDDMBE1KzJ0J8d-CB9TO9hR5sgZqq3hcLE",
+      authDomain: "chat-redragon-d83b7.firebaseapp.com",
+      databaseURL: "https://chat-redragon-d83b7-default-rtdb.firebaseio.com",
+      projectId: "chat-redragon-d83b7",
+      storageBucket: "chat-redragon-d83b7.appspot.com",
+      messagingSenderId: "458612487255",
+      appId: "1:458612487255:web:fd580d79985755bdc69f12",
+      measurementId: "G-WPKF4G22P1"
+    };
+
+    // Inicializar Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
     // DOM Elements
     const landingScreen = document.getElementById('landing-screen');
     const chatScreen = document.getElementById('chat-screen');
@@ -264,14 +283,6 @@
       }, 300);
     }
 
-    function loadMessagesFromLocalStorage() {
-      const messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
-      messages.forEach(msg => {
-        addMessage(msg.sender, msg.text, msg.type);
-      });
-    }
-
-    
     function goBack() {
       chatScreen.classList.add('slide-out');
       
@@ -412,9 +423,24 @@
     
     // Simulate sending message to backend
     function simulateSendMessageToBackend(message) {
-      console.log('Message sent to backend:', message);
-      // In a real app, this would make an API call to a backend service
+      const messageData = {
+        sender: username,
+        text: message,
+        type: 'user',
+        timestamp: Date.now()
+      };
+      db.ref("messages").push(messageData);
     }
+
+    function startMessagePolling() {
+      db.ref("messages").on("child_added", (snapshot) => {
+        const msg = snapshot.val();
+        if (msg.sender !== username) {
+          addMessage(msg.sender, msg.text, msg.type || 'ai');
+        }
+      });
+    }
+
     
     // Handle received message
     function receiveMessage(sender, text) {
@@ -452,13 +478,7 @@
         }, 3000);
       }
     }
-
-    function saveMessageToLocalStorage(sender, text, type) {
-      const messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
-      messages.push({ sender, text, type, timestamp: new Date().toISOString() });
-      localStorage.setItem('chatMessages', JSON.stringify(messages));
-    }
-
+    
   </script>
 </body>
 </html>
