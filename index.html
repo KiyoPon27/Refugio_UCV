@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Refugio UCV</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style id="app-style">
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      height: 100vh;
+      overscroll-behavior: none;
+    }
+
+    .chat-container {
+      max-width: 100%;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .message-list {
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+    }
+
+    .message-list::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .message-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .message-list::-webkit-scrollbar-thumb {
+      background-color: rgba(156, 163, 175, 0.5);
+      border-radius: 20px;
+    }
+
+    .user-message {
+      align-self: flex-end;
+      background-color: #dcf8c6; /* WhatsApp green */
+      color: #303030;
+      border-radius: 8px 8px 0 8px;
+      box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+      position: relative;
+    }
+
+    .ai-message {
+      align-self: flex-start;
+      background-color: white;
+      color: #303030;
+      border-radius: 8px 8px 8px 0;
+      box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+      position: relative;
+    }
+
+    .message-timestamp {
+      font-size: 0.7rem;
+      color: #8696a0;
+      margin-top: 2px;
+      text-align: right;
+    }
+
+    .message-status {
+      display: inline-block;
+      margin-left: 4px;
+      font-size: 0.8rem;
+      color: #8696a0;
+    }
+    
+    .message-status.read {
+      color: #4fc3f7;
+    }
+
+    .typing-indicator {
+      padding: 8px 16px;
+      border-radius: 18px;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .typing-indicator span {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      background-color: #8696a0;
+      border-radius: 50%;
+      margin: 0 2px;
+      animation: typing 1s infinite ease-in-out;
+    }
+
+    .slide-in {
+      animation: slideIn 0.3s ease-out forwards;
+    }
+
+    .slide-out {
+      animation: slideOut 0.3s ease-in forwards;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+
+    @keyframes slideOut {
+      from { transform: translateX(0); }
+      to { transform: translateX(-100%); }
+    }
+
+    .fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .typing-indicator span {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background-color: #3b82f6;
+      border-radius: 50%;
+      animation: typing 1s infinite ease-in-out;
+    }
+
+    .typing-indicator span:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .typing-indicator span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .typing-indicator span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes typing {
+      0%, 60%, 100% {
+        transform: translateY(0);
+      }
+      30% {
+        transform: translateY(-6px);
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+  <!-- Screen 1: Landing Screen -->
+  <div id="landing-screen" class="chat-container flex flex-col items-center justify-center p-6 bg-white">
+    <div class="w-full max-w-md text-center">
+      <h1 class="text-3xl font-bold mb-8 text-blue-600">Refugio UCV</h1>
+      
+      <div class="mb-6">
+        <label for="username" class="block text-lg font-medium text-gray-700 mb-2">Ingrese su nombre anónimo</label>
+        <input type="text" id="username" class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50" placeholder="Tu nombre...">
+        <p id="name-error" class="text-red-500 mt-2 hidden">Por favor, ingrese un nombre para continuar</p>
+      </div>
+      
+      <button id="start-chat-btn" class="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-lg shadow hover:bg-blue-700 transition duration-200">
+        Iniciar Chat
+      </button>
+    </div>
+  </div>
+
+  <!-- Screen 2: Chat Screen -->
+  <div id="chat-screen" class="chat-container flex flex-col hidden">
+    <!-- Header -->
+    <div class="bg-green-600 text-white border-b border-gray-200 px-4 py-3 flex items-center shadow-sm">
+      <button id="back-btn" class="mr-3 text-white">
+        <i class="fas fa-arrow-left text-lg"></i>
+      </button>
+      <div class="flex flex-col">
+        <h2 class="text-lg font-semibold">Chat Grupal</h2>
+        <span class="text-xs text-green-100">en línea</span>
+      </div>
+    </div>
+    
+    <!-- Message List -->
+    <div id="message-list" class="message-list flex-1 p-4 space-y-4 overflow-y-auto bg-gray-50">
+      <!-- Messages will be added here dynamically -->
+    </div>
+    
+    <!-- Input Area -->
+    <div class="bg-white border-t border-gray-200 p-3">
+      <div class="flex items-center space-x-2">
+        <input 
+          type="text" 
+          id="message-input" 
+          class="flex-1 border border-gray-300 rounded-full py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Escribe un mensaje..."
+        >
+        <button 
+          id="send-btn" 
+          class="bg-blue-600 text-white rounded-full w-12 h-12 flex items-center justify-center shadow-md hover:bg-blue-700 transition duration-200"
+        >
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <script id="app-script">
+    // DOM Elements
+    const landingScreen = document.getElementById('landing-screen');
+    const chatScreen = document.getElementById('chat-screen');
+    const usernameInput = document.getElementById('username');
+    const nameError = document.getElementById('name-error');
+    const startChatBtn = document.getElementById('start-chat-btn');
+    const backBtn = document.getElementById('back-btn');
+    const messageList = document.getElementById('message-list');
+    const messageInput = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+    
+    // State
+    let username = '';
+    
+    // Event Listeners
+    startChatBtn.addEventListener('click', startChat);
+    backBtn.addEventListener('click', goBack);
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+    
+    // Functions
+    function startChat() {
+      username = usernameInput.value.trim();
+      
+      if (!username) {
+        nameError.classList.remove('hidden');
+        return;
+      }
+      
+      nameError.classList.add('hidden');
+      landingScreen.classList.add('slide-out');
+      
+      setTimeout(() => {
+        landingScreen.classList.add('hidden');
+        chatScreen.classList.remove('hidden');
+        chatScreen.classList.add('slide-in');
+        
+        // Display simple welcome banner instead of AI message
+        const welcomeBanner = document.createElement('div');
+        welcomeBanner.classList.add('bg-blue-100', 'text-blue-700', 'p-3', 'rounded-lg', 'text-center', 'mb-4', 'fade-in');
+        welcomeBanner.textContent = '¡Bienvenido al chat!';
+        messageList.appendChild(welcomeBanner);
+
+        loadMessagesFromLocalStorage();
+        
+        messageInput.focus();
+        
+        // Request notification permission
+        requestNotificationPermission();
+        
+        // Start simulated message polling
+        startMessagePolling();
+      }, 300);
+    }
+
+    function loadMessagesFromLocalStorage() {
+      const messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+      messages.forEach(msg => {
+        addMessage(msg.sender, msg.text, msg.type);
+      });
+    }
+
+    
+    function goBack() {
+      chatScreen.classList.add('slide-out');
+      
+      setTimeout(() => {
+        chatScreen.classList.add('hidden');
+        chatScreen.classList.remove('slide-in', 'slide-out');
+        landingScreen.classList.remove('hidden', 'slide-out');
+        landingScreen.classList.add('slide-in');
+        
+        // Clear chat history
+        messageList.innerHTML = '';
+        usernameInput.value = username;
+        usernameInput.focus();
+        
+        // Clear any polling intervals
+        if (window.pollingInterval) {
+          clearInterval(window.pollingInterval);
+        }
+      }, 300);
+    }
+    
+    function sendMessage() {
+      const message = messageInput.value.trim();
+      if (!message) return;
+      
+      // Disable input and button
+      messageInput.disabled = true;
+      sendBtn.disabled = true;
+      
+      // Add user message
+      addMessage(username, message, 'user');
+      
+      // Clear input
+      messageInput.value = '';
+      
+      // Simulate sending message to backend
+      simulateSendMessageToBackend(message);
+      
+      // Re-enable input and button
+      messageInput.disabled = false;
+      sendBtn.disabled = false;
+      messageInput.focus();
+    }
+    
+    function addMessage(sender, text, type = 'ai') {
+      const messageElement = document.createElement('div');
+      messageElement.classList.add('flex', 'flex-col', 'mb-4', 'fade-in');
+      
+      const messageAlign = type === 'user' ? 'items-end' : 'items-start';
+      messageElement.classList.add(messageAlign);
+      
+      const senderElement = document.createElement('div');
+      senderElement.classList.add('text-xs', 'text-gray-500', 'mb-1', 'px-2');
+      senderElement.textContent = sender;
+      
+      const bubbleElement = document.createElement('div');
+      bubbleElement.classList.add('px-4', 'py-3', 'max-w-xs', 'break-words');
+      
+      if (type === 'user') {
+        bubbleElement.classList.add('user-message');
+      } else {
+        bubbleElement.classList.add('ai-message');
+      }
+      
+      bubbleElement.textContent = text;
+      
+      // Add timestamp
+      const timeElement = document.createElement('div');
+      timeElement.classList.add('message-timestamp');
+      const now = new Date();
+      timeElement.textContent = now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes();
+      
+      // Add read receipts for user messages
+      if (type === 'user') {
+        const statusElement = document.createElement('span');
+        statusElement.classList.add('message-status', 'read');
+        statusElement.innerHTML = '<i class="fas fa-check-double"></i>';
+        timeElement.appendChild(statusElement);
+      }
+      
+      bubbleElement.appendChild(timeElement);
+      
+      messageElement.appendChild(senderElement);
+      messageElement.appendChild(bubbleElement);
+      
+      messageList.appendChild(messageElement);
+
+      
+      // Guardar en localStorage
+      saveMessageToLocalStorage(sender, text, type);
+      
+      // Scroll to bottom
+      scrollToBottom();
+    }
+    
+    function showTypingIndicator() {
+      const typingElement = document.createElement('div');
+      typingElement.id = 'typing-indicator';
+      typingElement.classList.add('flex', 'items-start', 'mb-4');
+      
+      const senderElement = document.createElement('div');
+      senderElement.classList.add('text-xs', 'text-gray-500', 'mb-1', 'px-2');
+      senderElement.textContent = 'Alguien';  // Changed from 'Someone' to 'Alguien'
+      
+      const indicatorContent = document.createElement('div');
+      indicatorContent.classList.add('ai-message', 'typing-indicator');
+      
+      for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('span');
+        dot.classList.add('mx-0.5');
+        indicatorContent.appendChild(dot);
+      }
+      
+      typingElement.appendChild(senderElement);
+      typingElement.appendChild(indicatorContent);
+      messageList.appendChild(typingElement);
+      
+      scrollToBottom();
+    }
+    
+    function removeTypingIndicator() {
+      const typingIndicator = document.getElementById('typing-indicator');
+      if (typingIndicator) {
+        typingIndicator.remove();
+      }
+    }
+    
+    function scrollToBottom() {
+      messageList.scrollTop = messageList.scrollHeight;
+    }
+    
+    // Request notification permission
+    function requestNotificationPermission() {
+      if (Notification && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission();
+      }
+    }
+    
+    // Simulate sending message to backend
+    function simulateSendMessageToBackend(message) {
+      console.log('Message sent to backend:', message);
+      // In a real app, this would make an API call to a backend service
+    }
+    
+    // Handle received message
+    function receiveMessage(sender, text) {
+      addMessage(sender, text, 'ai'); // Using 'ai' class for non-user messages
+      
+      // Check if window is not focused to show notification
+      if (!document.hasFocus()) {
+        notifyNewMessage(sender, text);
+      }
+    }
+    
+    // Show notification for new message
+    function notifyNewMessage(sender, text) {
+      // Show browser notification if permission granted
+      if (Notification && Notification.permission === 'granted') {
+        const notification = new Notification('Nuevo mensaje de ' + sender, {
+          body: text,
+          icon: 'https://via.placeholder.com/48'
+        });
+        
+        notification.onclick = function() {
+          window.focus();
+          this.close();
+        };
+      } else {
+        // Fallback - show in-app notification
+        const notificationBanner = document.createElement('div');
+        notificationBanner.classList.add('fixed', 'top-4', 'right-4', 'bg-blue-600', 'text-white', 'p-3', 'rounded-lg', 'shadow-lg', 'z-50', 'fade-in');
+        notificationBanner.innerHTML = `<strong>${sender}:</strong> ${text}`;
+        document.body.appendChild(notificationBanner);
+        
+        setTimeout(() => {
+          notificationBanner.classList.add('fade-out');
+          setTimeout(() => notificationBanner.remove(), 300);
+        }, 3000);
+      }
+    }
+
+    function saveMessageToLocalStorage(sender, text, type) {
+      const messages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+      messages.push({ sender, text, type, timestamp: new Date().toISOString() });
+      localStorage.setItem('chatMessages', JSON.stringify(messages));
+    }
+
+  </script>
+</body>
+</html>
