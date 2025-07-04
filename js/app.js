@@ -45,33 +45,60 @@ messageInput.addEventListener('keypress', function(e) {
             welcomeBanner.textContent = '¡Bienvenido al chat!';
             messageList.appendChild(welcomeBanner);
             
-            // Cargar historial de chat
-            loadMessages();
+            // Verificar conexión a Supabase antes de cargar mensajes
+            checkSupabaseConnection().then(() => {
+                // Cargar historial de chat
+                loadMessages();
+                
+                // Solicitar permiso de notificación
+                requestNotificationPermission();
             
-            // Solicitar permiso de notificación
-            requestNotificationPermission();
-        
-            // Iniciar sondeo de mensajes simulados
-            startMessagePolling();
+                // Iniciar sondeo de mensajes simulados
+                startMessagePolling();
+            }).catch(error => {
+                console.error('Error de conexión a Supabase:', error);
+                const errorMessage = document.createElement('div');
+                errorMessage.classList.add('bg-red-100', 'text-red-700', 'p-3', 'rounded-lg', 'text-center', 'mb-4');
+                errorMessage.textContent = 'Error de conexión. Verifica tu configuración de Supabase.';
+                messageList.appendChild(errorMessage);
+            });
         }, 300);
     }
 
     async function loadMessages() {
-        const { data, error } = await supabase
-            .from('messages')
-            .select('*')
-            .order('created_at', { ascending: true });// <--- true para orden ascendente
+        try {
+            const { data, error } = await supabase
+                .from('messages')
+                .select('*')
+                .order('created_at', { ascending: true });
 
-        if (error) {
-            console.error('Error al cargar mensajes:', error);
-            return;
+            if (error) {
+                console.error('Error al cargar mensajes:', error);
+                // Mostrar mensaje de error al usuario
+                const errorMessage = document.createElement('div');
+                errorMessage.classList.add('bg-red-100', 'text-red-700', 'p-3', 'rounded-lg', 'text-center', 'mb-4');
+                errorMessage.textContent = 'Error al cargar mensajes. Verifica tu conexión.';
+                messageList.appendChild(errorMessage);
+                return;
+            }
+
+            messageList.innerHTML = '';
+            
+            if (data && data.length > 0) {
+                data.forEach(msg => {
+                    const type = msg.sender === username ? 'user' : 'ai';
+                    addMessage(msg.sender, msg.text, type, msg.created_at);
+                });
+            } else {
+                // Mostrar mensaje cuando no hay mensajes
+                const noMessages = document.createElement('div');
+                noMessages.classList.add('text-gray-500', 'text-center', 'py-8');
+                noMessages.textContent = 'No hay mensajes aún. ¡Sé el primero en escribir!';
+                messageList.appendChild(noMessages);
+            }
+        } catch (err) {
+            console.error('Error inesperado al cargar mensajes:', err);
         }
-
-        messageList.innerHTML = '';
-        data.forEach(msg => {
-            const type = msg.sender === username ? 'user' : 'ai';
-            addMessage(msg.sender, msg.text, type);
-        });
     }
 
     function goBack() {
@@ -88,9 +115,23 @@ messageInput.addEventListener('keypress', function(e) {
             usernameInput.value = username;
             usernameInput.focus();
         
-            // Borrar cualquier intervalo de sondeo
-            if (window.pollingInterval) {
-            clearInterval(window.pollingInterval);
+            // Desconectarse del canal de Supabase
+            if (window.chatChannel) {
+                window.chatChannel.unsubscribe();
+                window.chatChannel = null;
+                console.log('Desconectado del chat en tiempo real');
+            }
+            
+            // Limpiar intervalo de reconexión
+            if (window.reconnectionInterval) {
+                clearInterval(window.reconnectionInterval);
+                window.reconnectionInterval = null;
+            }
+            
+            // Ocultar indicador de estado de conexión
+            const statusElement = document.getElementById('connection-status');
+            if (statusElement) {
+                statusElement.remove();
             }
         }, 300);
     }
@@ -141,7 +182,7 @@ messageInput.addEventListener('keypress', function(e) {
     }
 
 
-    function addMessage(sender, text, type = 'ai') {
+    function addMessage(sender, text, type = 'ai', timestamp = null) {
         const messageElement = document.createElement('div');
         messageElement.classList.add('flex', 'flex-col', 'mb-4', 'fade-in');
         
@@ -168,8 +209,9 @@ messageInput.addEventListener('keypress', function(e) {
         const timeElement = document.createElement('div');
         timeElement.classList.add('message-timestamp');
 
-        const now = new Date();
-        const formatted = formatTimestamp(now);
+        // Usar la marca de tiempo proporcionada o crear una nueva
+        const messageTime = timestamp ? new Date(timestamp) : new Date();
+        const formatted = formatTimestamp(messageTime);
         timeElement.textContent = formatted;
 
         // Agregar confirmaciones de lectura para los mensajes de los usuarios
@@ -236,33 +278,169 @@ messageInput.addEventListener('keypress', function(e) {
     
 // Simular el envío de un mensaje al backend
     async function simulateSendMessageToBackend(message) {
-    const { error, data } = await supabase
-        .from('messages')
-        .insert([{ sender: username, text: message }]);
+        try {
+            const { error, data } = await supabase
+                .from('messages')
+                .insert([{ 
+                    sender: username, 
+                    text: message,
+                    created_at: new Date().toISOString()
+                }]);
 
-    if (error) {
-        console.error('Error al guardar mensaje en Supabase:', error.message);
-        alert('No se pudo enviar el mensaje: ' + error.message);
-        throw error;
-    } else {
-        console.log('Mensaje guardado en Supabase:', data);
+            if (error) {
+                console.error('Error al guardar mensaje en Supabase:', error);
+                
+                // Mostrar error más amigable
+                const errorMessage = document.createElement('div');
+                errorMessage.classList.add('bg-red-100', 'text-red-700', 'p-3', 'rounded-lg', 'text-center', 'mb-4', 'fade-in');
+                errorMessage.textContent = 'Error al enviar mensaje. Verifica tu conexión.';
+                messageList.appendChild(errorMessage);
+                
+                // Remover el mensaje de error después de 5 segundos
+                setTimeout(() => {
+                    if (errorMessage.parentNode) {
+                        errorMessage.remove();
+                    }
+                }, 5000);
+                
+                throw error;
+            } else {
+                console.log('Mensaje guardado en Supabase:', data);
+            }
+        } catch (err) {
+            console.error('Error inesperado al enviar mensaje:', err);
+            throw err;
+        }
     }
-}
 
 
     function startMessagePolling() {
-        supabase
-            .channel('chat-room')
+        // Crear un canal único para este usuario
+        const channel = supabase
+            .channel(`chat-room-${Date.now()}`)
             .on(
                 'postgres_changes', 
                 { event: 'INSERT', schema: 'public', table: 'messages' }, 
                 payload => {
-                const msg = payload.new;
-                if (msg.sender !== username) {
-                    addMessage(msg.sender, msg.text, 'ai');
+                    const msg = payload.new;
+                    console.log('Nuevo mensaje recibido:', msg);
+                    
+                    // Determinar el tipo de mensaje basado en el remitente
+                    const messageType = msg.sender === username ? 'user' : 'ai';
+                    
+                    // Solo agregar el mensaje si no es nuestro propio mensaje recién enviado
+                    // o si es un mensaje de otro usuario
+                    if (msg.sender !== username || !isRecentMessage(msg)) {
+                        addMessage(msg.sender, msg.text, messageType, msg.created_at);
+                        
+                        // Mostrar notificación si es un mensaje de otro usuario
+                        if (msg.sender !== username) {
+                            notifyNewMessage(msg.sender, msg.text);
+                        }
+                    }
                 }
+            )
+            .on('presence', { event: 'sync' }, () => {
+                console.log('Presencia sincronizada');
             })
-        .subscribe();
+            .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+                console.log('Usuario conectado:', newPresences);
+            })
+            .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+                console.log('Usuario desconectado:', leftPresences);
+            });
+
+        // Suscribirse al canal
+        channel.subscribe((status) => {
+            console.log('Estado de suscripción:', status);
+            if (status === 'SUBSCRIBED') {
+                console.log('Conectado al chat en tiempo real');
+                showConnectionStatus('connected');
+            } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+                console.log('Desconectado del chat en tiempo real');
+                showConnectionStatus('disconnected');
+            } else {
+                showConnectionStatus('connecting');
+            }
+        });
+
+        // Guardar referencia del canal para poder desconectarse después
+        window.chatChannel = channel;
+        
+        // Configurar reconexión automática
+        setupReconnection();
+    }
+
+    // Función para verificar si un mensaje es muy reciente (para evitar duplicados)
+    function isRecentMessage(msg) {
+        const now = new Date();
+        const msgTime = new Date(msg.created_at);
+        const diffInSeconds = (now - msgTime) / 1000;
+        
+        // Si el mensaje tiene menos de 2 segundos, considerarlo reciente
+        return diffInSeconds < 2;
+    }
+
+    // Función para reconectar automáticamente si se pierde la conexión
+    function setupReconnection() {
+        // Evitar múltiples intervalos
+        if (window.reconnectionInterval) {
+            clearInterval(window.reconnectionInterval);
+        }
+        
+        // Verificar conexión cada 30 segundos
+        window.reconnectionInterval = setInterval(() => {
+            if (window.chatChannel && window.chatChannel.subscribeStatus !== 'SUBSCRIBED') {
+                console.log('Reconectando al chat...');
+                startMessagePolling();
+            }
+        }, 30000);
+    }
+
+    // Función para verificar la conexión a Supabase
+    async function checkSupabaseConnection() {
+        try {
+            const { data, error } = await supabase
+                .from('messages')
+                .select('count')
+                .limit(1);
+            
+            if (error) {
+                throw error;
+            }
+            
+            console.log('Conexión a Supabase verificada correctamente');
+            return true;
+        } catch (error) {
+            console.error('Error al verificar conexión a Supabase:', error);
+            throw error;
+        }
+    }
+
+    // Función para mostrar el estado de conexión
+    function showConnectionStatus(status) {
+        const statusElement = document.getElementById('connection-status');
+        if (!statusElement) {
+            const statusDiv = document.createElement('div');
+            statusDiv.id = 'connection-status';
+            statusDiv.classList.add('fixed', 'top-2', 'right-2', 'px-3', 'py-1', 'rounded-full', 'text-xs', 'text-white', 'z-50');
+            document.body.appendChild(statusDiv);
+        }
+        
+        const element = document.getElementById('connection-status');
+        if (status === 'connected') {
+            element.textContent = '🟢 Conectado';
+            element.classList.remove('bg-red-500');
+            element.classList.add('bg-green-500');
+        } else if (status === 'disconnected') {
+            element.textContent = '🔴 Desconectado';
+            element.classList.remove('bg-green-500');
+            element.classList.add('bg-red-500');
+        } else {
+            element.textContent = '🟡 Conectando...';
+            element.classList.remove('bg-green-500', 'bg-red-500');
+            element.classList.add('bg-yellow-500');
+        }
     }
 
     
